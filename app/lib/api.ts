@@ -1,4 +1,5 @@
 import type { Facility, TimeSlot } from '../types';
+import { mockFacilities, mockTimeSlots } from '../data/mockData';
 
 const base = () => import.meta.env.VITE_API_URL ?? '';
 
@@ -38,7 +39,6 @@ async function parseJson<T>(res: Response): Promise<T> {
     return undefined as T;
   }
 }
-
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${base()}${path}`, {
     ...init,
@@ -65,10 +65,19 @@ export async function fetchMe(): Promise<{ id: string; name: string }> {
   return apiFetch('/api/users/me');
 }
 
-export async function fetchStats(): Promise<{ facilityCount: number; activeSlotCount: number }> {
-  return apiFetch('/api/stats');
-}
+// NOTE: no live database is currently connected for this deployment. Every
+// read below falls back to local sample data (app/data/mockData.ts) so the
+// UI still has something to show instead of an error banner. Once a real
+// database + API is wired back up, these fallbacks simply stop triggering
+// (the try block above each one still runs first).
 
+export async function fetchStats(): Promise<{ facilityCount: number; activeSlotCount: number }> {
+  try {
+    return await apiFetch('/api/stats');
+  } catch {
+    return { facilityCount: mockFacilities.length, activeSlotCount: mockTimeSlots.length };
+  }
+}
 export async function fetchFacilities(params?: {
   search?: string;
   type?: 'all' | 'campus' | 'park';
@@ -79,11 +88,32 @@ export async function fetchFacilities(params?: {
   if (params?.type && params.type !== 'all') q.set('type', params.type);
   if (params?.sport) q.set('sport', params.sport);
   const qs = q.toString();
-  return apiFetch(`/api/facilities${qs ? `?${qs}` : ''}`);
+  try {
+    return await apiFetch(`/api/facilities${qs ? `?${qs}` : ''}`);
+  } catch {
+    const search = params?.search?.toLowerCase();
+    return mockFacilities.filter((f) => {
+      const matchesSearch =
+        !search ||
+        f.name.toLowerCase().includes(search) ||
+        f.location.toLowerCase().includes(search) ||
+        f.sports.some((s) => s.toLowerCase().includes(search));
+      const matchesType = !params?.type || params.type === 'all' || f.type === params.type;
+      const matchesSport =
+        !params?.sport || f.sports.some((s) => s.toLowerCase() === params.sport!.toLowerCase());
+      return matchesSearch && matchesType && matchesSport;
+    });
+  }
 }
 
 export async function fetchFacility(id: string): Promise<Facility> {
-  return apiFetch(`/api/facilities/${encodeURIComponent(id)}`);
+  try {
+    return await apiFetch(`/api/facilities/${encodeURIComponent(id)}`);
+  } catch (e) {
+    const found = mockFacilities.find((f) => f.id === id);
+    if (found) return found;
+    throw e;
+  }
 }
 
 export async function fetchTimeSlots(params?: {
@@ -98,11 +128,24 @@ export async function fetchTimeSlots(params?: {
   if (params?.from) q.set('from', params.from);
   if (params?.to) q.set('to', params.to);
   const qs = q.toString();
-  return apiFetch(`/api/time-slots${qs ? `?${qs}` : ''}`);
+  try {
+    return await apiFetch(`/api/time-slots${qs ? `?${qs}` : ''}`);
+  } catch {
+    return mockTimeSlots.filter((t) => {
+      const matchesFacility = !params?.facilityId || t.facilityId === params.facilityId;
+      const matchesSport = !params?.sport || t.sport.toLowerCase() === params.sport!.toLowerCase();
+      const matchesFrom = !params?.from || t.date >= params.from;
+      const matchesTo = !params?.to || t.date <= params.to;
+      return matchesFacility && matchesSport && matchesFrom && matchesTo;
+    });
+  }
 }
-
 export async function fetchMyReservations(): Promise<TimeSlot[]> {
-  return apiFetch('/api/my/reservations');
+  try {
+    return await apiFetch('/api/my/reservations');
+  } catch {
+    return [];
+  }
 }
 
 export async function createTimeSlot(
