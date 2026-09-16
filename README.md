@@ -6,6 +6,12 @@ combined calendar.
 
 CSCI 450 — Software Engineering, Spring 2026.
 
+## Live demo
+
+**[biola-recconnect.netlify.app](https://biola-recconnect.netlify.app)**
+
+Currently running without a connected database, so the app falls back to sample facility and schedule data for browsing.
+
 ---
 
 ## Features
